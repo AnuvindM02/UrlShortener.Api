@@ -1,7 +1,10 @@
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using StackExchange.Redis;
+using UrlShortener.Api.Caching;
 using UrlShortener.Api.Options;
+using UrlShortener.Api.Repositories;
+using UrlShortener.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,22 +24,14 @@ builder.Services.Configure<ShortUrlOptions>(builder.Configuration.GetSection(Sho
 // Creating one per request would exhaust sockets. Singleton = one pool for
 // the app lifetime, which is the documented best practice.
 // ---------------------------------------------------------------------------
-// 1. Tell .NET to globally bind the config to the Options Pattern ONCE.
-builder.Services.Configure<MongoDbOptions>(
-    builder.Configuration.GetSection(MongoDbOptions.SectionName));
-
-// 2. Register the Client
 builder.Services.AddSingleton<IMongoClient>(sp =>
 {
-    // Resolve the globally configured options from DI using 'sp'
     var options = sp.GetRequiredService<IOptions<MongoDbOptions>>().Value;
     return new MongoClient(options.ConnectionString);
 });
 
-// 3. Register the Database
 builder.Services.AddSingleton(sp =>
 {
-    // Resolve BOTH the client and the options from DI
     var client = sp.GetRequiredService<IMongoClient>();
     var options = sp.GetRequiredService<IOptions<MongoDbOptions>>().Value;
     return client.GetDatabase(options.DatabaseName);
@@ -55,6 +50,16 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
     return ConnectionMultiplexer.Connect(config.ConnectionString);
 });
 
+// ---------------------------------------------------------------------------
+// Application Services
+// System Design Lesson: CounterService is singleton because it's stateless —
+// it delegates all state to MongoDB's atomic findOneAndUpdate. The MongoDB
+// collection handle it holds is thread-safe.
+// ---------------------------------------------------------------------------
+builder.Services.AddSingleton<ICounterService, CounterService>();
+builder.Services.AddSingleton<IUrlRepository, MongoUrlRepository>();
+builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+
 var app = builder.Build();
 
 // ---------------------------------------------------------------------------
@@ -65,3 +70,4 @@ var app = builder.Build();
 app.MapGet("/health", () => Results.Ok("OK"));
 
 app.Run();
+
