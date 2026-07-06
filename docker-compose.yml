@@ -47,5 +47,14 @@ services:
     depends_on:
       - redis
 
+  client:
+    build:
+      context: ../UrlShortnerClient
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - api
+
 volumes:
   mongodb_data:
