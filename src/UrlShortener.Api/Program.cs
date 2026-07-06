@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using StackExchange.Redis;
 using UrlShortener.Api.Caching;
+using UrlShortener.Api.Endpoints;
 using UrlShortener.Api.Options;
 using UrlShortener.Api.Repositories;
 using UrlShortener.Api.Services;
@@ -59,8 +60,21 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
 builder.Services.AddSingleton<ICounterService, CounterService>();
 builder.Services.AddSingleton<IUrlRepository, MongoUrlRepository>();
 builder.Services.AddSingleton<ICacheService, RedisCacheService>();
+builder.Services.AddSingleton<IUrlService, UrlService>();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowReactClient", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 
 var app = builder.Build();
+
+app.UseCors("AllowReactClient");
 
 // ---------------------------------------------------------------------------
 // Health check — smoke-tests that the API process is alive.
@@ -68,6 +82,8 @@ var app = builder.Build();
 // K8s) poll /health to decide whether to route traffic to this instance.
 // ---------------------------------------------------------------------------
 app.MapGet("/health", () => Results.Ok("OK"));
+
+app.MapUrlEndpoints();
 
 app.Run();
 
